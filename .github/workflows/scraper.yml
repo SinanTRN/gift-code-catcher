@@ -1,5 +1,8 @@
 name: WOS Gift Code Scraper
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     - cron: '0 * * * *' # Her saat başı çalışır (Zaman dilimi UTC'dir)
