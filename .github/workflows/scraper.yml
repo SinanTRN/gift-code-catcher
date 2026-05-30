@@ -1,0 +1,39 @@
+name: WOS Gift Code Scraper
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Her saat başı çalışır (Zaman dilimi UTC'dir)
+  workflow_dispatch: # Actions sekmesinden manuel tetikleme butonu ekler
+
+permissions:
+  contents: write # Botun seen_codes.json dosyasını repoya geri commit atabilmesi için gerekli izin
+
+jobs:
+  scrape-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Repository'yi Çek
+        uses: actions/checkout@v4
+
+      - name: Python Ortamını Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Gerekli Kütüphaneleri Yükle
+        run: pip install -r requirements.txt
+
+      - name: Scraper Scriptini Çalıştır
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Değişiklikleri GitHub'a Kaydet (Commit & Push)
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add seen_codes.json
+          # Eğer seen_codes.json değiştiyse commit at, değişmediyse hata verme devam et
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Otomatik Güncelleme: Yeni hediye kodları eklendi" && git push)
