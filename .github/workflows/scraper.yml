@@ -1,11 +1,11 @@
-name: WOS Gift Code Scraper
+name: Scraper and Auto-Redeem
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
   schedule:
-    - cron: '0 * * * *' # Her saat başı çalışır (Zaman dilimi UTC'dir)
+    - cron: '0 */2 * * *' # Her 2 saatte bir çalışır. Çekilme sıkılığını buradan ayarlayabilirsin.
   workflow_dispatch: # Actions sekmesinden manuel tetikleme butonu ekler
 
 permissions:
@@ -23,6 +23,11 @@ jobs:
         with:
           python-version: '3.10'
           cache: 'pip'
+
+      - name: Install System Dependencies (Tesseract OCR)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
 
       - name: Gerekli Kütüphaneleri Yükle
         run: pip install -r requirements.txt

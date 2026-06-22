@@ -1,2 +1,7 @@
-requests==2.31.0
-beautifulsoup4==4.12.3
+requests
+beautifulsoup4
+selenium
+webdriver-manager
+opencv-python-headless
+pytesseract
+Pillow
