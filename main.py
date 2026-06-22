@@ -45,9 +45,7 @@ def send_telegram_message(message):
         return False
 
 # ----- VERİ YÖNETİMİ -----
-def load_seen_codes():
-    if os.path.exists(STATE_FILE):
-        tplayer_ids():
+def load_player_ids():
     if os.path.exists(PLAYERS_FILE):
         try:
             with open(PLAYERS_FILE, "r") as f:
@@ -56,7 +54,9 @@ def load_seen_codes():
             return []
     return []
 
-def load_ry:
+def load_seen_codes():
+    if os.path.exists(STATE_FILE):
+        try:
             with open(STATE_FILE, "r") as f:
                 return json.load(f)
         except Exception:
