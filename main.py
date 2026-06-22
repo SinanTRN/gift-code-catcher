@@ -131,7 +131,7 @@ def auto_redeem(code, player_ids):
             # --- 1. AŞAMA: Player ID Log In ---
             try:
                 id_input = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Oyuncu Kimliği']"))
+                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Oyuncu Kimliği'] | //input[@placeholder='Player ID']"))
                 )
                 id_input.clear()
                 id_input.send_keys(pid)
@@ -148,12 +148,12 @@ def auto_redeem(code, player_ids):
             for attempt in range(3):
                 try:
                     code_input = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Hediye Kodunu Gir']"))
+                        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Hediye Kodunu Gir'] | //input[@placeholder='Enter Gift Code']"))
                     )
                     code_input.clear()
                     code_input.send_keys(code)
                     
-                    captcha_input = driver.find_element(By.XPATH, "//input[@placeholder='Lütfen kodu girin']")
+                    captcha_input = driver.find_element(By.XPATH, "//input[@placeholder='Lütfen kodu girin'] | //input[@placeholder='Enter verification code']")
                     captcha_img = driver.find_element(By.XPATH, "//img[@class='verify_pic']")
                     
                     captcha_img.screenshot("captcha.png")
