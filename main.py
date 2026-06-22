@@ -167,18 +167,18 @@ def auto_redeem(code, player_ids):
                     # Kullanma / Redeem Butonu
                     redeem_btn = driver.find_element(By.XPATH, "//div[contains(@class, 'btn')] | //button[contains(text(), 'Redeem') or contains(text(), 'Kullan')]")
                     redeem_btn.click()
-                    time.sleep(3)
+                    time.sleep(5)
                     
                     # Sonuç okuma (sayfanın kaynağı üzerinden anahtar kelirme arıyoruz)
                     page_text = driver.page_source.lower()
                     
-                    if "verification code error" in page_text or "captcha" in page_text or "doğrulama" in page_text:
+                    if "verification code error" in page_text or "captcha" in page_text or "doğrulama" in page_text or "incorrect code" in page_text or "retry the verification" in page_text:
                         print(f"[{pid}] Deneme {attempt+1}: Captcha Hatalı ({captcha_text})")
                         driver.refresh()
                         time.sleep(3)
                         continue
                         
-                    elif "success" in page_text or "congratulations" in page_text or "başarılı" in page_text:
+                    elif "success" in page_text or "congratulations" in page_text or "başarılı" in page_text or "redeemed" in page_text or "claim the rewards" in page_text:
                         results.append(f"✅ {pid}: Başarılı! (Captcha: {captcha_text})")
                         success = True
                         break
