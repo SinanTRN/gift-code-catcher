@@ -1,6 +1,12 @@
 [
     {
+        "nickname": "Silent",
         "player_id": "331353709",
+        "state": "2642"
+    },
+    {
+        "nickname": "ikinci_hesap",
+        "player_id": "430487075",
         "state": "2642"
     }
 ]

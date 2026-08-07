@@ -54,12 +54,21 @@ def load_players():
                         if isinstance(entry, str):
                             player_id = entry.strip()
                             if player_id:
-                                players.append({"player_id": player_id, "state": DEFAULT_STATE})
+                                players.append({
+                                    "player_id": player_id,
+                                    "state": DEFAULT_STATE,
+                                    "nickname": player_id
+                                })
                         elif isinstance(entry, dict):
                             player_id = str(entry.get("player_id") or entry.get("pid") or entry.get("id") or "").strip()
                             state = str(entry.get("state") or DEFAULT_STATE).strip()
+                            nickname = str(entry.get("nickname") or entry.get("name") or player_id).strip()
                             if player_id:
-                                players.append({"player_id": player_id, "state": state})
+                                players.append({
+                                    "player_id": player_id,
+                                    "state": state,
+                                    "nickname": nickname or player_id
+                                })
 
                 return players
         except Exception:
@@ -124,6 +133,17 @@ def click_first_clickable(driver, xpaths, timeout=10):
     locator = (By.XPATH, " | ".join(xpaths))
     return WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(locator)).click()
 
+def classify_redeem_result(page_text):
+    if any(keyword in page_text for keyword in ["already claimed, unable to claim again", "already claimed"]):
+        return "used"
+    if any(keyword in page_text for keyword in ["character info is incorrect", "please confirm and try again"]):
+        return "player_error"
+    if any(keyword in page_text for keyword in ["success", "congratulations", "başarılı", "redeemed", "claim the rewards"]):
+        return "success"
+    if any(keyword in page_text for keyword in ["verification code error", "incorrect code", "invalid", "used", "expired"]):
+        return "code_error"
+    return "unknown"
+
 def auto_redeem(code, players):
     results = []
     driver = setup_driver()
@@ -132,9 +152,10 @@ def auto_redeem(code, players):
         for player in players:
             pid = player["player_id"]
             state = player.get("state", "").strip()
+            nickname = player.get("nickname", pid).strip() or pid
 
             if not state:
-                results.append(f"⚠️ {pid}: State bilgisi eksik, atlandı.")
+                results.append(f"⚠️ {nickname}: State bilgisi eksik, atlandı.")
                 continue
 
             driver.get(REDEEM_URL)
@@ -174,16 +195,21 @@ def auto_redeem(code, players):
 
                 time.sleep(4)
                 page_text = driver.page_source.lower()
+                result_type = classify_redeem_result(page_text)
 
-                if any(keyword in page_text for keyword in ["success", "congratulations", "başarılı", "redeemed", "claim the rewards"]):
-                    results.append(f"✅ {pid}: Başarılı!")
-                elif any(keyword in page_text for keyword in ["verification code error", "incorrect code", "invalid", "used", "expired"]):
-                    results.append(f"⚠️ {pid}: Sonuç belirsiz veya kod geçersiz/kullanılmış olabilir.")
+                if result_type == "used":
+                    results.append(f"ℹ️ {nickname}: Kod kullanılmış.")
+                elif result_type == "player_error":
+                    results.append(f"❌ {nickname}: ID veya eyalet bilgisi hatalı.")
+                elif result_type == "success":
+                    results.append(f"✅ {nickname}: Başarılı!")
+                elif result_type == "code_error":
+                    results.append(f"⚠️ {nickname}: Kod geçersiz/süresi dolmuş olabilir.")
                 else:
-                    results.append(f"⚠️ {pid}: Gönderildi, ancak sonuç net okunamadı.")
+                    results.append(f"⚠️ {nickname}: Gönderildi, ancak sonuç net okunamadı.")
 
             except Exception as e:
-                results.append(f"❌ {pid}: Form doldurma/gönderme başarısız. {e}")
+                results.append(f"❌ {nickname}: Form doldurma/gönderme başarısız. {e}")
 
     finally:
         driver.quit()
@@ -198,7 +224,7 @@ def main():
         print("Oyuncu listesi boş! Lütfen players.json dosyasını kontrol edin.")
         return
     if any(not player.get("state", "").strip() for player in players):
-        print("Bazı kayıtlar için State bilgisi eksik. players.json içine state ekleyin ya da WOS_DEFAULT_STATE tanımlayın.")
+        print("Bazı kayıtlar için State bilgisi eksik. players.json içine state ekleyin.")
         
     current_codes = scrape_codes()
     
