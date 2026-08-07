@@ -4,10 +4,6 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-import cv2
-import pytesseract
-import numpy as np
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -24,6 +20,7 @@ URL = "https://wosgiftcodes.com/"
 REDEEM_URL = "https://wos-giftcode.centurygame.com/"
 STATE_FILE = "seen_codes.json"
 PLAYERS_FILE = "players.json"
+DEFAULT_STATE = "2642"
 
 # ----- TELEGRAM FONKSİYONLARI -----
 def send_telegram_message(message):
@@ -45,11 +42,26 @@ def send_telegram_message(message):
         return False
 
 # ----- VERİ YÖNETİMİ -----
-def load_player_ids():
+def load_players():
     if os.path.exists(PLAYERS_FILE):
         try:
             with open(PLAYERS_FILE, "r") as f:
-                return json.load(f)
+                raw_players = json.load(f)
+                players = []
+
+                if isinstance(raw_players, list):
+                    for entry in raw_players:
+                        if isinstance(entry, str):
+                            player_id = entry.strip()
+                            if player_id:
+                                players.append({"player_id": player_id, "state": DEFAULT_STATE})
+                        elif isinstance(entry, dict):
+                            player_id = str(entry.get("player_id") or entry.get("pid") or entry.get("id") or "").strip()
+                            state = str(entry.get("state") or DEFAULT_STATE).strip()
+                            if player_id:
+                                players.append({"player_id": player_id, "state": state})
+
+                return players
         except Exception:
             return []
     return []
@@ -90,7 +102,7 @@ def scrape_codes():
         print(f"Scrape Hatası: {e}")
         return []
 
-# ----- SELENIUM & OCR FONKSİYONLARI -----
+# ----- SELENIUM FONKSİYONLARI -----
 def setup_driver():
     options = Options()
     options.add_argument("--headless") # Arka planda çalışma
@@ -104,113 +116,89 @@ def setup_driver():
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=options)
 
-def solve_captcha(image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        return ""
-        
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    
-    custom_config = r'--oem 3 --psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    text = pytesseract.image_to_string(thresh, config=custom_config)
-    
-    return text.strip()
+def get_first_visible_element(driver, xpaths, timeout=10):
+    locator = (By.XPATH, " | ".join(xpaths))
+    return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located(locator))
 
-def auto_redeem(code, player_ids):
+def click_first_clickable(driver, xpaths, timeout=10):
+    locator = (By.XPATH, " | ".join(xpaths))
+    return WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(locator)).click()
+
+def auto_redeem(code, players):
     results = []
     driver = setup_driver()
     
     try:
-        for pid in player_ids:
+        for player in players:
+            pid = player["player_id"]
+            state = player.get("state", "").strip()
+
+            if not state:
+                results.append(f"⚠️ {pid}: State bilgisi eksik, atlandı.")
+                continue
+
             driver.get(REDEEM_URL)
             time.sleep(3) # Sayfa yüklenmesi
-            
-            success = False
-            
-            # --- 1. AŞAMA: Player ID Log In ---
+
             try:
-                id_input = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Oyuncu Kimliği'] | //input[@placeholder='Player ID']"))
-                )
+                id_input = get_first_visible_element(driver, [
+                    "//input[@placeholder='Player ID']",
+                    "//input[contains(@placeholder, 'Player ID')]",
+                    "//input[contains(@placeholder, 'Oyuncu')]"
+                ])
                 id_input.clear()
                 id_input.send_keys(pid)
-                
-                login_btn = driver.find_element(By.XPATH, "//div[contains(@class, 'login_btn')]")
-                login_btn.click()
-                time.sleep(3) # Giriş sonrası modalı bekle
-                
+
+                state_input = get_first_visible_element(driver, [
+                    "//input[@placeholder='State']",
+                    "//input[contains(@placeholder, 'State')]",
+                    "//input[contains(@placeholder, 'State/Region')]"
+                ])
+                state_input.clear()
+                state_input.send_keys(state)
+
+                code_input = get_first_visible_element(driver, [
+                    "//input[@placeholder='Enter Gift Code']",
+                    "//input[contains(@placeholder, 'Gift Code')]",
+                    "//input[contains(@placeholder, 'Hediye')]"
+                ])
+                code_input.clear()
+                code_input.send_keys(code)
+
+                click_first_clickable(driver, [
+                    "//div[contains(@class, 'exchange_btn') and not(contains(@class, 'disabled'))]",
+                    "//button[contains(@class, 'exchange_btn') and not(contains(@class, 'disabled'))]",
+                    "//div[contains(@class, 'exchange_btn') and contains(., 'Confirm') and not(contains(@class, 'disabled'))]",
+                    "//button[contains(., 'Confirm') and not(contains(@class, 'disabled'))]"
+                ])
+
+                time.sleep(4)
+                page_text = driver.page_source.lower()
+
+                if any(keyword in page_text for keyword in ["success", "congratulations", "başarılı", "redeemed", "claim the rewards"]):
+                    results.append(f"✅ {pid}: Başarılı!")
+                elif any(keyword in page_text for keyword in ["verification code error", "incorrect code", "invalid", "used", "expired"]):
+                    results.append(f"⚠️ {pid}: Sonuç belirsiz veya kod geçersiz/kullanılmış olabilir.")
+                else:
+                    results.append(f"⚠️ {pid}: Gönderildi, ancak sonuç net okunamadı.")
+
             except Exception as e:
-                results.append(f"❌ {pid}: Giriş yapılamadı. Element bulunamadı.")
-                continue
-                
-            # --- 2. AŞAMA: Kod + Captcha Doldurma (Max 3 Retry) ---
-            for attempt in range(3):
-                try:
-                    code_input = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Hediye Kodunu Gir'] | //input[@placeholder='Enter Gift Code']"))
-                    )
-                    code_input.clear()
-                    code_input.send_keys(code)
-                    
-                    captcha_input = driver.find_element(By.XPATH, "//input[@placeholder='Lütfen kodu girin'] | //input[@placeholder='Enter verification code']")
-                    captcha_img = driver.find_element(By.XPATH, "//img[@class='verify_pic']")
-                    
-                    captcha_img.screenshot("captcha.png")
-                    captcha_text = solve_captcha("captcha.png")
-                    if not captcha_text:
-                        captcha_text = "0000" # Bilerek patlatıp döngüye soksun
-                        
-                    captcha_input.clear()
-                    captcha_input.send_keys(captcha_text)
-                    
-                    # Kullanma / Redeem Butonu
-                    redeem_btn = driver.find_element(By.XPATH, "//div[contains(@class, 'btn')] | //button[contains(text(), 'Redeem') or contains(text(), 'Kullan')]")
-                    redeem_btn.click()
-                    time.sleep(5)
-                    
-                    # Sonuç okuma (sayfanın kaynağı üzerinden anahtar kelirme arıyoruz)
-                    page_text = driver.page_source.lower()
-                    
-                    if "verification code error" in page_text or "captcha" in page_text or "doğrulama" in page_text or "incorrect code" in page_text or "retry the verification" in page_text:
-                        print(f"[{pid}] Deneme {attempt+1}: Captcha Hatalı ({captcha_text})")
-                        driver.refresh()
-                        time.sleep(3)
-                        continue
-                        
-                    elif "success" in page_text or "congratulations" in page_text or "başarılı" in page_text or "redeemed" in page_text or "claim the rewards" in page_text:
-                        results.append(f"✅ {pid}: Başarılı! (Captcha: {captcha_text})")
-                        success = True
-                        break
-                        
-                    else:
-                        # Kod zaten kullanılmış veya geçersizse
-                        results.append(f"⚠️ {pid}: Sonuç belirsiz (Geçersiz veya kullanılmış olabilir).")
-                        success = True # Captcha hatası değil, bu yüzden retry kırılır
-                        break
-                        
-                except Exception as e:
-                    print(f"[{pid}] Deneme {attempt+1} Hatası: {e}")
-                    driver.refresh()
-                    time.sleep(3)
-            
-            if not success:
-                results.append(f"❌ {pid}: Max 3 captcha denemesi başarısız.")
-                
+                results.append(f"❌ {pid}: Form doldurma/gönderme başarısız. {e}")
+
     finally:
         driver.quit()
-        if os.path.exists("captcha.png"):
-            os.remove("captcha.png")
             
     return results
 
 # ----- ANA İSKELET -----
 def main():
     print("Whiteout Survival Otomatik Bot Başladı...")
-    player_ids = load_player_ids()
-    if not player_ids:
-        print("Oyuncu ID listesi boş! Lütfen players.json dosyasını kontrol edin.")
+    players = load_players()
+    if not players:
+        print("Oyuncu listesi boş! Lütfen players.json dosyasını kontrol edin.")
         return
+    if any(not player.get("state", "").strip() for player in players):
+        print("Bazı kayıtlar için State bilgisi eksik. players.json içine state ekleyin ya da WOS_DEFAULT_STATE tanımlayın.")
         
     current_codes = scrape_codes()
     
@@ -229,7 +217,7 @@ def main():
             send_telegram_message(msg_start)
             
             # 2. Redeem İşlemi
-            redeem_results = auto_redeem(code, player_ids)
+            redeem_results = auto_redeem(code, players)
             
             # 3. Sonuç / Özet Mesajı
             summary = "\n".join(redeem_results)
