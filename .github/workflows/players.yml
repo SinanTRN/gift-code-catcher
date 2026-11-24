@@ -1,0 +1,64 @@
+name: Oyuncu Ekle / Sil (Issue)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write # players.json commit
+  issues: write   # sonucu yorum olarak yazıp issue'yu kapatmak için
+
+# Oyuncu işlemleri sırayla çalışsın
+concurrency:
+  group: player-management
+  cancel-in-progress: false
+
+jobs:
+  manage-player:
+    # Repo public: yalnızca repo sahibinin açtığı "Oyuncu ekle / sil" formu işlenir
+    if: >-
+      github.event.issue.user.login == github.repository_owner &&
+      contains(github.event.issue.body, '### İşlem')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Repository'yi Çek
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Python Ortamını Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Gerekli Kütüphaneleri Yükle
+        run: pip install -r requirements.txt
+
+      - name: Issue'yu İşle
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }} # run içine doğrudan yazılmaz (script injection'a karşı)
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py issue
+
+      - name: players.json'u Kaydet (Commit & Push)
+        if: always() # oyuncu eklendi ama kod denemesi çöktüyse bile ekleme kaybolmasın
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add players.json
+          git diff --staged --quiet || (git commit -m "Oyuncu güncellemesi (issue #${{ github.event.issue.number }})" && git pull --rebase origin main && git push)
+
+      - name: Sonucu Yorumla ve Issue'yu Kapat
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          [ -f issue_result.md ] || echo "❌ İşlem sırasında beklenmeyen bir hata oluştu, Actions loglarına bakın." > issue_result.md
+          gh issue comment "$ISSUE_NUMBER" --body-file issue_result.md
+          gh issue close "$ISSUE_NUMBER"

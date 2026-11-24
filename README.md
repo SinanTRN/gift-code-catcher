@@ -52,6 +52,24 @@ Windows dışında kullanıyorsanız yerine uygun komutları kullanın.
    python main.py
    ```
 
+## Oyuncu Ekleme / Silme
+
+`players.json` dosyasını elle düzenlemek gerekmez. İki yol var, ikisini de yalnızca repo sahibi kullanabilir:
+
+**Telegram komutları** (bir sonraki saatlik çalışmada işlenir):
+
+```
+/ekle <player_id> <state> [nick]   -> oyuncu ekle / güncelle
+/sil <player_id>                   -> oyuncu sil
+/liste                             -> oyuncuları listele
+```
+
+Komutları yalnızca `TELEGRAM_ADMIN_ID` secret'ındaki Telegram kullanıcısı verebilir. Bu secret tanımlı değilse `TELEGRAM_CHAT_ID` kullanılır.
+
+**GitHub issue formu** (birkaç saniye içinde işlenir): Issues → New issue → "Oyuncu ekle / sil". Sonuç issue'ya yorum olarak yazılır ve issue kapatılır.
+
+Yeni eklenen oyuncu için sitede hâlâ listelenen aktif kodlar otomatik denenir. Diğer oyuncular için bu kodlar tekrar denenmez.
+
 ## Dosya Açıklamaları
 
 - [main.py](main.py): Ana bot mantığı ve otomatik redeem akışı

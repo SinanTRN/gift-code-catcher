@@ -1,0 +1,32 @@
+name: Oyuncu ekle / sil
+description: players.json'a oyuncu ekler veya siler. Eklenen oyuncu için aktif kodlar otomatik denenir.
+title: "Oyuncu işlemi"
+labels: ["oyuncu"]
+body:
+  - type: dropdown
+    id: islem
+    attributes:
+      label: İşlem
+      options:
+        - Ekle
+        - Sil
+    validations:
+      required: true
+  - type: input
+    id: player_id
+    attributes:
+      label: Player ID
+      placeholder: "334135929"
+    validations:
+      required: true
+  - type: input
+    id: state
+    attributes:
+      label: State
+      description: Ekleme için zorunlu. Silmede boş bırakılabilir.
+      placeholder: "2912"
+  - type: input
+    id: nickname
+    attributes:
+      label: Nickname
+      description: Opsiyonel. Boş bırakılırsa Player ID kullanılır.
