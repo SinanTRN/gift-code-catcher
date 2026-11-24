@@ -5,11 +5,18 @@ env:
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # Her 2 saatte bir çalışır. Çekilme sıkılığını buradan ayarlayabilirsin.
-  workflow_dispatch: # Actions sekmesinden manuel tetikleme butonu ekler
+    # Yedek tetikleyici. Asıl saatlik tetikleme cron-job.org -> workflow_dispatch ile yapılır.
+    # GitHub schedule'ı yoğunlukta gecikir/atlar; saat başı (:00) yerine sakin bir dakika seçildi.
+    - cron: '37 */3 * * *'
+  workflow_dispatch: # cron-job.org her saat GitHub API üzerinden bunu tetikler (ayrıca Actions sekmesinde manuel buton)
 
 permissions:
   contents: write # Botun seen_codes.json dosyasını repoya geri commit atabilmesi için gerekli izin
+
+# Aynı anda tek çalışma: dispatch ve schedule çakışırsa aynı kod iki kez kullanılmasın.
+concurrency:
+  group: gift-code-scraper
+  cancel-in-progress: false
 
 jobs:
   scrape-and-notify:
@@ -17,6 +24,8 @@ jobs:
     steps:
       - name: Git Repository'yi Çek
         uses: actions/checkout@v4
+        with:
+          ref: main # Tetiklenme anındaki SHA yerine güncel main; sırada bekleyen çalışma eski seen_codes.json okumasın
 
       - name: Python Ortamını Kur
         uses: actions/setup-python@v5
@@ -43,5 +52,6 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add seen_codes.json
-          # Eğer seen_codes.json değiştiyse commit at, değişmediyse hata verme devam et
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Otomatik Güncelleme: Yeni hediye kodları eklendi" && git push)
+          # Eğer seen_codes.json değiştiyse commit at, değişmediyse hata verme devam et.
+          # Push öncesi rebase: çalışma sırasında elle yapılan push'lar botun push'unu bozmasın.
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Otomatik Güncelleme: Yeni hediye kodları eklendi" && git pull --rebase origin main && git push)
